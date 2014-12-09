@@ -45,13 +45,13 @@ Making history
 In order for historic versions to exist, some work is necessary.  Let's consider the case of updating an `Article`.  If `Article` was not versioned (e.g. if it inherited from `Model` instead of `Versionable`), updating an `Article` would look like this:
 
     a = Article.objects.get(name='Efficiency in Solar Energy Conversion')
-    a.name = 'Efficient Solar Energy Collection')
+    a.name = 'Efficient Solar Energy Collection'
     a.save()
 
 When working with a `Versionable` object, we need to explicitly create a copy of the object before saving changes if we want to be able to look back and see what the old value was.  This can be done via the `clone()` method, which needs to be called on the current version of an object:
 
     a = Article.objects.current.get(name='Efficiency in Solar Energy Conversion').clone()
-    a.name = 'Efficient Solar Energy Collection')
+    a.name = 'Efficient Solar Energy Collection'
     a.save()
 
 It's not necessary to explicitly manage the history of foreign key or many-to-many relationships; this is done behind the scenes when `clone()` is called.
