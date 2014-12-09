@@ -1,0 +1,72 @@
+An interesting Django package was recently open-sourced by Swisscom.  Manuel Jeckelmann wrote an interesting [article][1] about how the process of open-sourcing this worked at Swisscom. In the context of work on a security data warehouse at Swisscom, Liip has also worked on developing this package.  I'll briefly describe here what's special about this package and how it can be used.
+
+CleanerVersion lets you maintain a history of model instances and their relations.  There are a [number of packages][2] that can be used for versioning in Django.  What makes this one different?
+
+Point in Time Querying
+-------------------------
+The big difference that CleanerVersion offers is point-in-time querying.  You can use the standard Django QuerySet API methods to query current or previous versions.  This also works for objects related via ForeignKey or ManyToManyField relationships.
+
+The real-life use cases where this is useful are often complex.  To explain how it works though, let's consider a simple setup:
+
+    class Blog(Versionable):
+        name = models.CharField(max_length="200")
+
+
+    class Tag(Versionable):
+        name = models.CharField(max_length="32")
+
+
+    class Article(Versionable):
+        name = models.CharField(max_length="200")
+        text = models.TextField(null=True)
+        blog = VersionedForeignKey(Blog)
+        tags = VersionedManyToManyField(Tag, related_name='articles')
+
+As you can see, this is very similar to the standard Django model declaration syntax.  The models just inherit from `Versionable` instead of `Model`, and they use custom relationship managers (`VersionedForeignKey` instead of `ForeignKey`, `VersionedManyToManyField` instead of `ManyToManyField`).
+
+If these models were subclassed directly from `Model` instead of `Versionable`, we could find all the tags that are used on any of the articles in the blog named 'Innovation' like this:
+
+    tags = Tag.objects.filter(article__blog__name='Innovation').all().distinct()
+
+With CleanerVersion, to get the same thing, we'll need to specify that we want the current version of these objects:
+
+    tags = Tag.objects.current.filter(article__blog__name='Innovation').all().distinct()
+
+More interesting, though, is that we can query for the state at some past time t1:
+
+    tags = Tag.objects.as_of(t1).filter(article__blog__name='Innovation').all().distinct()
+
+This effectively lets us put on our wayback glasses to see what it looked like at time t1.  If there was a tag at time t1 that was written 'sciense', and this was later corrected to 'science', we would see it in it's original state ('sciense') in the result of this query.  The versioned many-to-many relationship traversal is transparent, and standard Django QuerySet syntax is used. Well, almost: `as_of()` is provided by CleanerVersion, and can be chained together with Django's standard QuerySet methods.
+
+This possibility of easily and efficiently (at the code as well as the database level) finding the historic relations is, as far as I know, unique among the Django versioning solutions.
+
+Making history
+----------------
+In order for historic versions to exist, some work is necessary.  Let's consider the case of updating an `Article`.  If `Article` was not versioned (e.g. if it inherited from `Model` instead of `Versionable`), updating an `Article` would look like this:
+
+    a = Article.objects.get(name='Efficiency in Solar Energy Conversion')
+    a.name = 'Efficient Solar Energy Collection')
+    a.save()
+
+When working with a `Versionable` object, we need to explicitly create a copy of the object before saving changes if we want to be able to look back and see what the old value was.  This can be done via the `clone()` method, which needs to be called on the current version of an object:
+
+    a = Article.objects.current.get(name='Efficiency in Solar Energy Conversion').clone()
+    a.name = 'Efficient Solar Energy Collection')
+    a.save()
+
+It's not necessary to explicitly manage the history of foreign key or many-to-many relationships; this is done behind the scenes when `clone()` is called.
+
+Interested?
+-------------
+The [project][3] is hosted on GitHub.  Try it out!
+
+CleanerVersion's [documentation][6] provides a good explanation of how to use it and how it is implemented.
+
+The [slides][5] from Manuel Jeckelmann's recent presentation at a [Django CH Meetup][4] are also available.
+
+[1]: http://ict.swisscom.ch/2014/10/oss-in-practice/
+[2]: https://www.djangopackages.com/grids/g/versioning/
+[3]: https://github.com/swisscom/cleanerversion
+[4]: https://twitter.com/django_ch
+[5]: http://t.co/jPj7DB8LNi
+[6]: http://cleanerversion.readthedocs.org/en/latest/
